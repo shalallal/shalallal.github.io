@@ -5,142 +5,199 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>공룡 피하기 게임</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f4f4f4;
-        }
-
-        .game {
-            position: relative;
-            width: 600px;
-            height: 200px;
-            border: 2px solid #000;
+            margin: 0;
             overflow: hidden;
-            background-color: #fff;
+            background-color: #87CEEB;
         }
-
-        #dino {
+        #gameCanvas {
+            border: 1px solid black;
+        }
+        #startScreen, #gameOverScreen {
             position: absolute;
-            bottom: 0;
-            left: 50px;
-            font-size: 40px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 10px;
         }
-
-        #cactus {
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 20px;
-            height: 40px;
-            background-color: red;
-            animation: moveCactus 1.5s infinite linear; /* 속도 빠르게 변경 */
-        }
-
-        @keyframes moveCactus {
-            0% {
-                right: 0;
-            }
-            100% {
-                right: 600px;
-            }
+        #gameOverScreen {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <div class="game">
-        <div id="dino">🦖</div> <!-- 공룡 이모티콘 -->
-        <div id="cactus"></div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="startScreen">
+        <h1>공룡 피하기 게임</h1>
+        <p>스페이스바를 눌러 시작하세요</p>
+    </div>
+    <div id="gameOverScreen">
+        <h1>게임 오버!</h1>
+        <p>스페이스바를 눌러 다시 시작하세요</p>
     </div>
 
     <script>
-        const dino = document.getElementById('dino');
-        const cactus = document.getElementById('cactus');
-        let isJumping = false;
-        let gravity = 0.9;
-        let jumpHeight = 150; // 점프 높이
-        let moveSpeed = 5; // 좌우 이동 속도
-        let dinoPosition = 50; // 공룡의 초기 위치
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
 
-        // 점프 처리
-        document.addEventListener('keydown', function(event) {
-            if (event.code === 'Space' && !isJumping) {
-                jump();
-            } else if (event.code === 'ArrowRight') {
-                moveRight();
-            } else if (event.code === 'ArrowLeft') {
-                moveLeft();
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let gameStarted = false;
+        let gameOver = false;
+        let player = { x: 50, y: canvas.height / 2, width: 30, height: 30, speed: 5 };
+        let dinosaurs = [];
+        let score = 0;
+        let startTime;
+        let lastDinosaurAddTime;
+
+        const dinosaurColors = ['yellow', 'blue', 'green', 'orange', 'pink'];
+
+        function drawPlayer() {
+            ctx.fillStyle = 'red';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+        }
+
+        function drawDinosaur(dinosaur) {
+            ctx.fillStyle = dinosaur.color;
+            ctx.fillRect(dinosaur.x, dinosaur.y, dinosaur.width, dinosaur.height);
+        }
+
+        function createDinosaur() {
+            return {
+                x: canvas.width,
+                y: Math.random() * (canvas.height - 50),
+                width: 40,
+                height: 40,
+                speed: Math.random() * 2 + 1,
+                color: dinosaurColors[Math.floor(Math.random() * dinosaurColors.length)]
+            };
+        }
+
+        function moveDinosaurs() {
+            for (let dinosaur of dinosaurs) {
+                dinosaur.x -= dinosaur.speed;
+                if (dinosaur.x + dinosaur.width < 0) {
+                    dinosaur.x = canvas.width;
+                    dinosaur.y = Math.random() * (canvas.height - dinosaur.height);
+                    dinosaur.color = dinosaurColors[Math.floor(Math.random() * dinosaurColors.length)];
+                }
+            }
+        }
+
+        function checkCollision() {
+            for (let dinosaur of dinosaurs) {
+                if (
+                    player.x < dinosaur.x + dinosaur.width &&
+                    player.x + player.width > dinosaur.x &&
+                    player.y < dinosaur.y + dinosaur.height &&
+                    player.y + player.height > dinosaur.y
+                ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function increaseDifficulty() {
+            const currentTime = Date.now();
+            const elapsedTime = (currentTime - startTime) / 1000;
+            
+            // 5초마다 공룡 추가
+            if (currentTime - lastDinosaurAddTime > 5000) {
+                const newDinosaurCount = Math.floor(Math.random() * 3) + 3; // 3~5마리 추가
+                for (let i = 0; i < newDinosaurCount; i++) {
+                    dinosaurs.push(createDinosaur());
+                }
+                lastDinosaurAddTime = currentTime;
+            }
+
+            // 10초마다 속도 증가
+            if (elapsedTime > 10 && elapsedTime % 10 < 0.1) {
+                for (let dinosaur of dinosaurs) {
+                    dinosaur.speed += 0.2;
+                }
+            }
+        }
+
+        function drawScore() {
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+        }
+
+        function updatePlayerPosition() {
+            if (keys.ArrowUp && player.y > 0) player.y -= player.speed;
+            if (keys.ArrowDown && player.y < canvas.height - player.height) player.y += player.speed;
+            if (keys.ArrowLeft && player.x > 0) player.x -= player.speed;
+            if (keys.ArrowRight && player.x < canvas.width - player.width) player.x += player.speed;
+        }
+
+        function gameLoop() {
+            if (!gameStarted || gameOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            updatePlayerPosition();
+            drawPlayer();
+            for (let dinosaur of dinosaurs) {
+                drawDinosaur(dinosaur);
+            }
+            moveDinosaurs();
+            increaseDifficulty();
+            drawScore();
+
+            if (checkCollision()) {
+                gameOver = true;
+                gameOverScreen.style.display = 'block';
+            } else {
+                score++;
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function startGame() {
+            gameStarted = true;
+            gameOver = false;
+            player = { x: 50, y: canvas.height / 2, width: 30, height: 30, speed: 5 };
+            dinosaurs = [];
+            for (let i = 0; i < 3; i++) {
+                dinosaurs.push(createDinosaur());
+            }
+            score = 0;
+            startTime = Date.now();
+            lastDinosaurAddTime = startTime;
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            gameLoop();
+        }
+
+        const keys = {};
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                if (!gameStarted || gameOver) {
+                    startGame();
+                }
+            } else {
+                keys[e.code] = true;
             }
         });
 
-        function jump() {
-            let position = 0;
-            let timer = setInterval(function() {
-                if (position >= jumpHeight) {
-                    clearInterval(timer);
-                    let downTimer = setInterval(function() {
-                        if (position <= 0) {
-                            clearInterval(downTimer);
-                            isJumping = false;
-                        }
-                        position -= 5;
-                        position = Math.max(position, 0);
-                        dino.style.bottom = position + 'px';
-                    }, 20);
-                } else {
-                    isJumping = true;
-                    position += 5;
-                    dino.style.bottom = position + 'px';
-                }
-            }, 20);
-        }
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
 
-        // 오른쪽 이동
-        function moveRight() {
-            dinoPosition += moveSpeed;
-            dinoPosition = Math.min(dinoPosition, 560); // 오른쪽 경계 제한
-            dino.style.left = dinoPosition + 'px';
-        }
-
-        // 왼쪽 이동
-        function moveLeft() {
-            dinoPosition -= moveSpeed;
-            dinoPosition = Math.max(dinoPosition, 0); // 왼쪽 경계 제한
-            dino.style.left = dinoPosition + 'px';
-        }
-
-        // 충돌 체크
-        function checkCollision() {
-            const dinoRect = dino.getBoundingClientRect();
-            const cactusRect = cactus.getBoundingClientRect();
-
-            if (
-                dinoRect.right > cactusRect.left &&
-                dinoRect.left < cactusRect.right &&
-                dinoRect.bottom > cactusRect.top
-            ) {
-                alert("Game Over!");
-                resetGame();
-            }
-        }
-
-        // 게임 리셋
-        function resetGame() {
-            cactus.style.animation = 'none';
-            setTimeout(() => {
-                cactus.style.animation = 'moveCactus 1.5s infinite linear';
-            }, 100);
-        }
-
-        setInterval(checkCollision, 10);
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
     </script>
 </body>
 </html>
